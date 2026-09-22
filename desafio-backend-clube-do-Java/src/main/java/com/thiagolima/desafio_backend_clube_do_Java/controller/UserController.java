@@ -1,0 +1,47 @@
+package com.thiagolima.desafio_backend_clube_do_Java.controller;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.thiagolima.desafio_backend_clube_do_Java.dto.user.CreateUserRequest;
+import com.thiagolima.desafio_backend_clube_do_Java.dto.user.LoginUserRequest;
+import com.thiagolima.desafio_backend_clube_do_Java.dto.user.UserResponse;
+import com.thiagolima.desafio_backend_clube_do_Java.service.UserService;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/users")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final UserService userService;
+
+    @RequestMapping("/create")
+    public ResponseEntity<Void> create(@Valid @RequestBody CreateUserRequest request) {
+        userService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @RequestMapping("/login")
+    public ResponseEntity<UserResponse> login(@Valid @RequestBody LoginUserRequest request) {
+        return ResponseEntity.ok(userService.login(request));
+    }
+
+    @RequestMapping("/update/{id}")
+    public ResponseEntity<Void> update(@Valid @RequestBody CreateUserRequest request, @PathVariable Long id) {
+        userService.update(request, id);
+        return ResponseEntity.ok().build();
+    }
+
+    @RequestMapping("/delete/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        userService.delete(id);
+        return ResponseEntity.ok().build();
+    }
+}

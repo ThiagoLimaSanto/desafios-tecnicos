@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: desafio-backend-clube-do-java
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:desafio-backend-clube-do-java}
+    username: ${POSTGRES_USER:desafio}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+
+server:
+  port: ${SERVER_PORT:8080}

@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: dividaApi
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:divida}
+    username: ${POSTGRES_USER:divida}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+
+server:
+  port: ${SERVER_PORT:8080}
