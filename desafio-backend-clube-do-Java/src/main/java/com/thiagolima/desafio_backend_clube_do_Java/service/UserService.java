@@ -1,5 +1,6 @@
 package com.thiagolima.desafio_backend_clube_do_Java.service;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.CreateUserRequest;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public void create(CreateUserRequest request) {
         User user = new User();
@@ -28,7 +30,7 @@ public class UserService {
         user.setDocument(request.document());
         user.setDocumentType(request.documentType());
         user.setEmail(request.email());
-        user.setPassword(request.password());
+        user.setPassword(passwordEncoder.encode(request.password()));
 
         userRepository.save(user);
     }
@@ -36,6 +38,9 @@ public class UserService {
     public UserResponse login(LoginUserRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new UserNotExistException("Email ou senha inválidos"));
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new UserNotExistException("Email ou senha inválidos");
+        }
         return new UserResponse(user.getId().toString());
     }
 
