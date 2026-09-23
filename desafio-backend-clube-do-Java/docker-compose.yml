@@ -26,6 +26,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-desafio}
       POSTGRES_USER: ${POSTGRES_USER:-desafio}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env}
       SERVER_PORT: 8080
       JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
     depends_on:

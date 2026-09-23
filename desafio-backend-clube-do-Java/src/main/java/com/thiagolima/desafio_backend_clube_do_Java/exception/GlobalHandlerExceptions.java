@@ -1,6 +1,8 @@
 package com.thiagolima.desafio_backend_clube_do_Java.exception;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -9,6 +11,18 @@ import com.thiagolima.desafio_backend_clube_do_Java.error.ErrorResponse;
 
 @RestControllerAdvice
 public class GlobalHandlerExceptions {
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException error) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(401, "Email ou senha inválidos"));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException error) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ErrorResponse(403, error.getMessage()));
+    }
 
     @ExceptionHandler(UserExistException.class)
     public ResponseEntity<ErrorResponse> handleUserExistException(UserExistException e) {

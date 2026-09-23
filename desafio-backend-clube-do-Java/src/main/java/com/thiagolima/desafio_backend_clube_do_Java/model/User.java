@@ -1,5 +1,11 @@
 package com.thiagolima.desafio_backend_clube_do_Java.model;
 
+import java.util.Collection;
+import java.util.List;
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import com.thiagolima.desafio_backend_clube_do_Java.enums.DocumentType;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.UserRole;
@@ -20,7 +26,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
-public class User {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -38,4 +44,19 @@ public class User {
     private String password;
 
     private UserRole role;
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return role == null ? List.of() : List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
 }

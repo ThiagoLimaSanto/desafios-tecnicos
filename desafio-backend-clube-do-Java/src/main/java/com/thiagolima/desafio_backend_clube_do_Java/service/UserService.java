@@ -1,9 +1,16 @@
 package com.thiagolima.desafio_backend_clube_do_Java.service;
 
+import java.util.Objects;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.CreateUserRequest;
+import com.thiagolima.desafio_backend_clube_do_Java.dto.user.UpdateUserRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.LoginUserRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.UserResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.UserExistException;
@@ -19,6 +26,8 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final AuthenticationManager authenticationManager;
 
     public void create(CreateUserRequest request) {
         User user = new User();
@@ -26,6 +35,7 @@ public class UserService {
             throw new UserExistException("Email já cadastrado");
         }
 
+        user.setRole(Objects.requireNonNull(request.role(), "Perfil é obrigatório"));
         user.setName(request.name());
         user.setDocument(request.document());
         user.setDocumentType(request.documentType());
@@ -36,30 +46,39 @@ public class UserService {
     }
 
     public UserResponse login(LoginUserRequest request) {
-        User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UserNotExistException("Email ou senha inválidos"));
-        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new UserNotExistException("Email ou senha inválidos");
-        }
-        return new UserResponse(user.getId().toString());
+        var authentication = authenticationManager.authenticate(
+                UsernamePasswordAuthenticationToken.unauthenticated(request.email(), request.password()));
+        User user = (User) authentication.getPrincipal();
+        return new UserResponse(jwtService.generateToken(user.getEmail(), user.getRole(), user.getName()));
     }
 
-    public void update(CreateUserRequest request, Long id) {
+    public void update(UpdateUserRequest request, Long id) {
+        requireOwnAccount(id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotExistException("Usuário não encontrado"));
         user.setName(request.name());
         user.setDocument(request.document());
         user.setDocumentType(request.documentType());
         user.setEmail(request.email());
-        user.setPassword(request.password());
+        user.setPassword(passwordEncoder.encode(request.password()));
 
         userRepository.save(user);
     }
 
     public void delete(Long id) {
+        requireOwnAccount(id);
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotExistException("Usuário não encontrado"));
 
         userRepository.delete(user);
+    }
+
+    private void requireOwnAccount(Long id) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof User principal)
+                || id == null || !id.equals(principal.getId())) {
+            throw new AccessDeniedException("Você só pode alterar ou excluir sua própria conta");
+        }
     }
 }
