@@ -2,6 +2,8 @@ package com.thiagolima.desafio_backend_clube_do_Java.model;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
 
@@ -14,6 +16,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -39,6 +42,9 @@ public class Project {
     @ManyToOne
     @JoinColumn(name = "freelancer_id")
     private User freelancerId;
+
+    @OneToMany(mappedBy = "project")
+    private List<ProjectCorrection> corrections = new ArrayList<>();
 
     private String title;
     private String description;

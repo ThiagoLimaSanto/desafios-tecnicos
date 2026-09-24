@@ -41,7 +41,7 @@ class ProposalServiceTest {
         project.setStatus(ProjectStatus.OPEN);
         freelancer = user(2000L);
         proposal = new Proposal();
-        proposal.setId(20L);
+        ReflectionTestUtils.setField(proposal, "id", 20L);
         proposal.setProject(project);
         proposal.setFreelancer(freelancer);
         when(projects.findById(10L)).thenReturn(Optional.of(project));
@@ -123,7 +123,7 @@ class ProposalServiceTest {
     @Test
     void listsAllProposalsWithTheirStatus() {
         Proposal second = new Proposal();
-        second.setId(21L);
+        ReflectionTestUtils.setField(second, "id", 21L);
         second.setFreelancer(freelancer);
         second.setStatus(ProposalStatus.REJECTED);
         when(proposals.findByProjectId(10L)).thenReturn(List.of(proposal, second));

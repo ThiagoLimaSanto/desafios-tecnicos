@@ -1,15 +1,15 @@
 package com.thiagolima.desafio_backend_clube_do_Java.config;
 
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.http.HttpMethod;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -21,40 +21,55 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final SecurityFilter securityFilter;
+        private final SecurityFilter securityFilter;
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http.csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(
-                        SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/users/login", "/users/create").permitAll()
-                        .requestMatchers("/projects/create").hasRole("CLIENT")
-                        .anyRequest().authenticated())
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint((request, response, error) -> response.setStatus(401))
-                        .accessDeniedHandler((request, response, error) -> response.setStatus(403)))
-                .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class).build();
-    }
+        @Bean
+        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                return http.csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session.sessionCreationPolicy(
+                                                SessionCreationPolicy.STATELESS))
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers(HttpMethod.POST, "/users/login", "/users/create")
+                                                .permitAll()
+                                                .requestMatchers("/projects/create", "/projects/{projectId}/update",
+                                                                "/projects/{projectId}/finished",
+                                                                "/projects/{projectId}/delete",
+                                                                "/projects/{projectId}/proposals",
+                                                                "/projects/{projectId}/proposals/{proposalId}/**")
+                                                .hasRole("CLIENT")
+                                                .requestMatchers("/projects/{projectId}/proposals/apply",
+                                                                "/projects/{projectId}/completed")
+                                                .hasRole("FREELANCER")
+                                                .requestMatchers(HttpMethod.POST, "/projects/{projectId}/corrections")
+                                                .hasRole("CLIENT")
+                                                .requestMatchers(HttpMethod.GET, "/projects/{projectId}/corrections")
+                                                .hasAnyRole("CLIENT", "FREELANCER")
+                                                .anyRequest().authenticated())
+                                .exceptionHandling(exceptions -> exceptions
+                                                .authenticationEntryPoint(
+                                                                (request, response, error) -> response.setStatus(401))
+                                                .accessDeniedHandler(
+                                                                (request, response, error) -> response.setStatus(403)))
+                                .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class).build();
+        }
 
-    @Bean
-    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService,
-            PasswordEncoder passwordEncoder) {
-        var provider = new DaoAuthenticationProvider(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder);
-        return new ProviderManager(provider);
-    }
+        @Bean
+        public AuthenticationManager authenticationManager(UserDetailsService userDetailsService,
+                        PasswordEncoder passwordEncoder) {
+                var provider = new DaoAuthenticationProvider(userDetailsService);
+                provider.setPasswordEncoder(passwordEncoder);
+                return new ProviderManager(provider);
+        }
 
-    @Bean
-    public FilterRegistrationBean<SecurityFilter> securityFilterRegistration(SecurityFilter filter) {
-        var registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
-    }
+        @Bean
+        public FilterRegistrationBean<SecurityFilter> securityFilterRegistration(SecurityFilter filter) {
+                var registration = new FilterRegistrationBean<>(filter);
+                registration.setEnabled(false);
+                return registration;
+        }
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 }

@@ -44,15 +44,29 @@ public class ProjectController {
 
     }
 
-    @PutMapping("/update")
-    public ResponseEntity<Void> updateProject(@Valid @RequestBody ProjectRequest request, @PathVariable Long id) {
-        projectService.updateProject(request, id);
+    @PutMapping("/{projectId}/update")
+    public ResponseEntity<Void> updateProject(@Valid @RequestBody ProjectRequest request,
+            @PathVariable Long projectId) {
+        projectService.updateProject(request, projectId);
         return ResponseEntity.ok().build();
     }
 
-    @DeleteMapping("/delete")
-    public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
-        projectService.deleteProject(id);
+    @PutMapping("/{projectId}/completed")
+    public ResponseEntity<Void> completedProject(@PathVariable Long projectId) {
+        projectService.completedProject(projectId);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/{projectId}/finished")
+    public ResponseEntity<Void> finishedProject(@PathVariable Long projectId) {
+        projectService.finishedProject(projectId);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{projectId}/delete")
+    public ResponseEntity<Void> deleteProject(@PathVariable Long projectId) {
+        projectService.deleteProject(projectId);
+        return ResponseEntity.ok().build();
+    }
+
 }
