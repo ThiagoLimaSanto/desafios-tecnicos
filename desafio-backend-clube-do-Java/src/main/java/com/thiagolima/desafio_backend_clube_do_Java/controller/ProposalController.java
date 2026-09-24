@@ -49,4 +49,10 @@ public class ProposalController {
         proposalService.reject(projectId, proposalId);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/{proposalId}/negotiate")
+    public ResponseEntity<Void> negotiate(@PathVariable Long projectId, @PathVariable Long proposalId) {
+        proposalService.negotiate(projectId, proposalId);
+        return ResponseEntity.ok().build();
+    }
 }

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -131,6 +132,113 @@ class ProposalServiceTest {
         assertEquals(2, response.size());
         assertEquals(ProposalStatus.PENDING, response.get(0).status());
         assertEquals(ProposalStatus.REJECTED, response.get(1).status());
+    }
+
+    @Test
+    void startsNegotiationWithoutAssigningFreelancer() {
+        service.negotiate(10L, 20L);
+        assertEquals(ProjectStatus.IN_NEGOCIATION, project.getStatus());
+        assertEquals(ProposalStatus.IN_NEGOCIATION, proposal.getStatus());
+        assertNull(project.getFreelancerId());
+        verify(projects).save(project);
+        verify(proposals).save(proposal);
+    }
+
+    @Test
+    void acceptsNegotiatedProposal() {
+        service.negotiate(10L, 20L);
+        clearInvocations(projects, proposals);
+        service.accept(10L, 20L);
+        assertEquals(ProjectStatus.IN_PROGRESS, project.getStatus());
+        assertEquals(ProposalStatus.ACCEPTED, proposal.getStatus());
+        assertSame(freelancer, project.getFreelancerId());
+        verify(projects).save(project);
+        verify(proposals).save(proposal);
+    }
+
+    @Test
+    void rejectingNegotiationReopensProjectAndAllowsAnotherNegotiation() {
+        service.negotiate(10L, 20L);
+        clearInvocations(projects, proposals);
+        service.reject(10L, 20L);
+        assertEquals(ProjectStatus.OPEN, project.getStatus());
+        assertEquals(ProposalStatus.REJECTED, proposal.getStatus());
+        assertNull(project.getFreelancerId());
+        verify(projects).save(project);
+        verify(proposals).save(proposal);
+
+        Proposal second = new Proposal();
+        second.setProject(project);
+        second.setFreelancer(user(3000L));
+        when(proposals.findById(21L)).thenReturn(Optional.of(second));
+        service.negotiate(10L, 21L);
+        assertEquals(ProjectStatus.IN_NEGOCIATION, project.getStatus());
+        assertEquals(ProposalStatus.IN_NEGOCIATION, second.getStatus());
+        assertEquals(ProposalStatus.REJECTED, proposal.getStatus());
+    }
+
+    @Test
+    void cannotDecideOrNegotiateAnotherProposalDuringNegotiation() {
+        service.negotiate(10L, 20L);
+        Proposal second = new Proposal();
+        second.setProject(project);
+        when(proposals.findById(21L)).thenReturn(Optional.of(second));
+        clearInvocations(projects, proposals);
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> service.accept(10L, 21L)).getStatusCode().value());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> service.reject(10L, 21L)).getStatusCode().value());
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> service.negotiate(10L, 21L)).getStatusCode().value());
+        assertEquals(ProposalStatus.PENDING, second.getStatus());
+        assertEquals(ProposalStatus.IN_NEGOCIATION, proposal.getStatus());
+        verifyNoSaves();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProjectStatus.class,
+            names = "OPEN", mode = EnumSource.Mode.EXCLUDE)
+    void negotiationRequiresOpenProject(ProjectStatus status) {
+        project.setStatus(status);
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> service.negotiate(10L, 20L)).getStatusCode().value());
+        assertEquals(status, project.getStatus());
+        verifyNoSaves();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProposalStatus.class,
+            names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
+    void negotiationRequiresPendingProposal(ProposalStatus status) {
+        proposal.setStatus(status);
+        assertEquals(409, assertThrows(ResponseStatusException.class,
+                () -> service.negotiate(10L, 20L)).getStatusCode().value());
+        verifyNoSaves();
+    }
+
+    @Test
+    void negotiationRequiresOwner() {
+        project.setClientId(user(3000L));
+        assertThrows(AccessDeniedException.class, () -> service.negotiate(10L, 20L));
+        verifyNoSaves();
+    }
+
+    @Test
+    void negotiationRequiresProposalFromSameProject() {
+        Project other = new Project();
+        ReflectionTestUtils.setField(other, "id", 11L);
+        proposal.setProject(other);
+        assertThrows(AccessDeniedException.class, () -> service.negotiate(10L, 20L));
+        verifyNoSaves();
+    }
+
+    @Test
+    void negotiationDoesNotReplaceAssignedFreelancer() {
+        project.setFreelancerId(freelancer);
+        assertThrows(ProjectExistFreelancerException.class, () -> service.negotiate(10L, 20L));
+        assertEquals(ProjectStatus.OPEN, project.getStatus());
+        assertEquals(ProposalStatus.PENDING, proposal.getStatus());
+        verifyNoSaves();
     }
 
     private void decide(boolean accept) {

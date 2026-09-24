@@ -74,6 +74,7 @@ public class ProposalService {
     @Transactional
     public void accept(Long projectId, Long proposalId) {
         Proposal proposal = findProposalAndValidateOwner(projectId, proposalId);
+        validateDecisionState(proposal);
         Project project = proposal.getProject();
 
         if (project.getFreelancerId() != null) {
@@ -92,7 +93,32 @@ public class ProposalService {
     @Transactional
     public void reject(Long projectId, Long proposalId) {
         Proposal proposal = findProposalAndValidateOwner(projectId, proposalId);
+        validateDecisionState(proposal);
+        Project project = proposal.getProject();
+        if (proposal.getStatus() == ProposalStatus.IN_NEGOCIATION) {
+            project.setStatus(ProjectStatus.OPEN);
+            projectRepository.save(project);
+        }
         proposal.setStatus(ProposalStatus.REJECTED);
+        proposalRepository.save(proposal);
+    }
+
+    @Transactional
+    public void negotiate(Long projectId, Long proposalId) {
+        Proposal proposal = findProposalAndValidateOwner(projectId, proposalId);
+        Project project = proposal.getProject();
+        if (project.getStatus() != ProjectStatus.OPEN || proposal.getStatus() != ProposalStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "A negociação exige um projeto aberto e uma proposta pendente");
+        }
+        if (project.getFreelancerId() != null) {
+            throw new ProjectExistFreelancerException(
+                    "O projeto já possui um freelancer associado");
+        }
+
+        project.setStatus(ProjectStatus.IN_NEGOCIATION);
+        proposal.setStatus(ProposalStatus.IN_NEGOCIATION);
+        projectRepository.save(project);
         proposalRepository.save(proposal);
     }
 
@@ -114,16 +140,19 @@ public class ProposalService {
             throw new AccessDeniedException("A proposta não pertence ao projeto informado");
         }
 
-        if (project.getStatus() != ProjectStatus.OPEN) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "O projeto não está aberto para decidir sobre propostas");
-        }
-
-        if (proposal.getStatus() != ProposalStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "A proposta já foi aceita ou rejeitada");
-        }
-
         return proposal;
+    }
+
+    private void validateDecisionState(Proposal proposal) {
+        ProjectStatus projectStatus = proposal.getProject().getStatus();
+        boolean pendingInOpenProject = projectStatus == ProjectStatus.OPEN
+                && proposal.getStatus() == ProposalStatus.PENDING;
+        boolean negotiating = projectStatus == ProjectStatus.IN_NEGOCIATION
+                && proposal.getStatus() == ProposalStatus.IN_NEGOCIATION;
+
+        if (!pendingInOpenProject && !negotiating) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O estado do projeto ou da proposta não permite essa decisão");
+        }
     }
 }
