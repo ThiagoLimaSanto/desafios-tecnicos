@@ -59,4 +59,8 @@ public class User implements UserDetails {
     public String getUsername() {
         return email;
     }
+
+    public Long getId() {
+        return id;
+    }
 }

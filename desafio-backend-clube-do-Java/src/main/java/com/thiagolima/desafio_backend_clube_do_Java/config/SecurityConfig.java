@@ -30,7 +30,7 @@ public class SecurityConfig {
                         SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/users/login", "/users/create").permitAll()
-                        .requestMatchers("/projects/**").hasRole("CLIENT")
+                        .requestMatchers("/projects/create").hasRole("CLIENT")
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, error) -> response.setStatus(401))
