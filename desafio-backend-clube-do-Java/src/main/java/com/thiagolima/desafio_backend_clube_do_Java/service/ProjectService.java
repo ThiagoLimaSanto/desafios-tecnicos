@@ -3,12 +3,17 @@ package com.thiagolima.desafio_backend_clube_do_Java.service;
 import java.util.List;
 import java.util.Objects;
 
+import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.thiagolima.desafio_backend_clube_do_Java.config.RabbitMQConfig;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProjectRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProjectResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectCompletEvent;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectFinishEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
@@ -22,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class ProjectService {
 
         private final ProjectRepository projectRepository;
+        private final OutboxService outboxService;
 
         public ProjectResponse createProject(ProjectRequest request) {
                 User user = GetUserAuthentication.getUserAuthenticated();
@@ -63,10 +69,10 @@ public class ProjectService {
                 project.setDescription(request.description());
                 project.setDeadline(request.deadline());
                 project.setEstimatedBudget(request.estimatedBudget());
-                project.setStatus(ProjectStatus.OPEN);
                 projectRepository.save(project);
         }
 
+        @Transactional
         public void completedProject(Long id) {
                 User user = GetUserAuthentication.getUserAuthenticated();
                 Project project = projectRepository.findById(id)
@@ -82,8 +88,14 @@ public class ProjectService {
 
                 project.setStatus(ProjectStatus.COMPLETED);
                 projectRepository.save(project);
+
+                ProjectCompletEvent event = new ProjectCompletEvent(project.getId(), project.getClientId().getId());
+
+                outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_COMPLETED_KEY,
+                                event);
         }
 
+        @Transactional
         public void finishedProject(Long id) {
                 User user = GetUserAuthentication.getUserAuthenticated();
                 Project project = projectRepository.findById(id)
@@ -99,6 +111,11 @@ public class ProjectService {
 
                 project.setStatus(ProjectStatus.FINISHED);
                 projectRepository.save(project);
+
+                ProjectFinishEvent event = new ProjectFinishEvent(project.getId(), project.getClientId().getId());
+
+                outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_FINISHED_KEY,
+                                event);
         }
 
         public void deleteProject(Long id) {

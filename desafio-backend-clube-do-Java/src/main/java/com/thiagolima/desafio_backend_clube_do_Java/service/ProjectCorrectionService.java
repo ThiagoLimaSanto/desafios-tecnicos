@@ -3,15 +3,18 @@ package com.thiagolima.desafio_backend_clube_do_Java.service;
 import java.util.List;
 import java.util.Objects;
 
+import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.thiagolima.desafio_backend_clube_do_Java.config.RabbitMQConfig;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.CorrectionsRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProjectCorrectionResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectCorrectionsEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.ProjectCorrection;
@@ -28,6 +31,7 @@ public class ProjectCorrectionService {
 
     private final ProjectRepository projectRepository;
     private final ProjectCorrectionRepository projectCorrectionRepository;
+    private final OutboxService outboxService;
 
     @Transactional
     public void corrections(Long id, CorrectionsRequest request) {
@@ -48,6 +52,10 @@ public class ProjectCorrectionService {
         project.setStatus(ProjectStatus.IN_PROGRESS);
         projectRepository.save(project);
         projectCorrectionRepository.save(projectCorrection);
+
+        ProjectCorrectionsEvent event = new ProjectCorrectionsEvent(project.getId());
+
+        outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_CORRECTIONS_KEY, event);
     }
 
     public List<ProjectCorrectionResponse> listCorrectionByProject(Long projectId) {

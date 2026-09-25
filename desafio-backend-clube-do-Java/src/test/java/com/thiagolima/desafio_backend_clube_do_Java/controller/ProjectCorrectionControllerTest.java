@@ -36,6 +36,7 @@ class ProjectCorrectionControllerTest {
     private static final String BODY = "{\"correction\":\"Ajustar o layout\"}";
 
     @Autowired MockMvc mvc;
+    @MockitoBean com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService outboxService;
     @MockitoBean ProjectRepository projects;
     @MockitoBean ProjectCorrectionRepository corrections;
     @MockitoBean JwtService jwt;

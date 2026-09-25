@@ -11,6 +11,10 @@ spring:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO}
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     host: rabbitmq
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_DEFAULT_USER}

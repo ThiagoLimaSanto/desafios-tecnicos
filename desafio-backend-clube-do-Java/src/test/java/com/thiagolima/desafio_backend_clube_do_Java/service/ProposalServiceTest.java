@@ -1,7 +1,15 @@
 package com.thiagolima.desafio_backend_clube_do_Java.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
@@ -10,23 +18,32 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.thiagolima.desafio_backend_clube_do_Java.enums.*;
+import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
+import com.thiagolima.desafio_backend_clube_do_Java.enums.ProposalStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectExistFreelancerException;
-import com.thiagolima.desafio_backend_clube_do_Java.model.*;
-import com.thiagolima.desafio_backend_clube_do_Java.repositories.*;
+import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
+import com.thiagolima.desafio_backend_clube_do_Java.model.Proposal;
+import com.thiagolima.desafio_backend_clube_do_Java.model.User;
+import com.thiagolima.desafio_backend_clube_do_Java.repositories.ProjectRepository;
+import com.thiagolima.desafio_backend_clube_do_Java.repositories.ProposalRepository;
 
+import lombok.RequiredArgsConstructor;
+
+@RequiredArgsConstructor
 class ProposalServiceTest {
     private final ProposalRepository proposals = mock(ProposalRepository.class);
     private final ProjectRepository projects = mock(ProjectRepository.class);
-    private final ProposalService service = new ProposalService(proposals, projects);
+    private final OutboxService outboxService = mock(OutboxService.class);
+    private final ProposalService service = new ProposalService(proposals, projects, outboxService);
     private Project project;
     private Proposal proposal;
     private User freelancer;
@@ -75,7 +92,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     void refusesProposalFromAnotherProject(boolean accept) {
         Project other = new Project();
         ReflectionTestUtils.setField(other, "id", 11L);
@@ -85,7 +102,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     void refusesAnotherClient(boolean accept) {
         project.setClientId(user(3000L));
         assertThrows(AccessDeniedException.class, () -> decide(accept));
@@ -93,7 +110,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     void refusesAlreadyDecidedProposals(boolean accept) {
         for (ProposalStatus status : List.of(ProposalStatus.ACCEPTED, ProposalStatus.REJECTED)) {
             proposal.setStatus(status);
@@ -104,7 +121,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @ValueSource(booleans = { true, false })
     void refusesClosedProject(boolean accept) {
         project.setStatus(ProjectStatus.IN_PROGRESS);
         assertThrows(ResponseStatusException.class, () -> decide(accept));
@@ -196,8 +213,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ProjectStatus.class,
-            names = "OPEN", mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = ProjectStatus.class, names = "OPEN", mode = EnumSource.Mode.EXCLUDE)
     void negotiationRequiresOpenProject(ProjectStatus status) {
         project.setStatus(status);
         assertEquals(409, assertThrows(ResponseStatusException.class,
@@ -207,8 +223,7 @@ class ProposalServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ProposalStatus.class,
-            names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = ProposalStatus.class, names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
     void negotiationRequiresPendingProposal(ProposalStatus status) {
         proposal.setStatus(status);
         assertEquals(409, assertThrows(ResponseStatusException.class,
@@ -242,8 +257,10 @@ class ProposalServiceTest {
     }
 
     private void decide(boolean accept) {
-        if (accept) service.accept(10L, 20L);
-        else service.reject(10L, 20L);
+        if (accept)
+            service.accept(10L, 20L);
+        else
+            service.reject(10L, 20L);
     }
 
     private void verifyNoSaves() {

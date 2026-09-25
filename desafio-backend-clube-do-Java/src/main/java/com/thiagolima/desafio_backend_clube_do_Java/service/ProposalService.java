@@ -9,16 +9,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.thiagolima.desafio_backend_clube_do_Java.config.RabbitMQConfig;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProposalRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProposalResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProposalStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.UserRole;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectAcceptEvent;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectNegotiateEvent;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectRejectedEvent;
+import com.thiagolima.desafio_backend_clube_do_Java.event.ProposalEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectExistFreelancerException;
 import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Proposal;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
+import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
 import com.thiagolima.desafio_backend_clube_do_Java.repositories.ProjectRepository;
 import com.thiagolima.desafio_backend_clube_do_Java.repositories.ProposalRepository;
 import com.thiagolima.desafio_backend_clube_do_Java.utils.GetUserAuthentication;
@@ -31,7 +37,9 @@ public class ProposalService {
 
     private final ProposalRepository proposalRepository;
     private final ProjectRepository projectRepository;
+    private final OutboxService outboxService;
 
+    @Transactional
     public void applyProject(Long id, ProposalRequest request) {
         User freelancer = GetUserAuthentication.getUserAuthenticated();
 
@@ -43,6 +51,11 @@ public class ProposalService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
+        if (project.getStatus() != ProjectStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "O projeto não está aberto para propostas");
+        }
+
         Proposal proposal = new Proposal();
         proposal.setProject(project);
         proposal.setFreelancer(freelancer);
@@ -50,6 +63,10 @@ public class ProposalService {
         proposal.setEstimatedDeliveryDate(request.estimatedDeliveryDate());
 
         proposalRepository.save(proposal);
+
+        ProposalEvent event = new ProposalEvent(project.getId(), project.getClientId().getId(), freelancer.getId());
+
+        outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROPOSAL_CREATED_KEY, event);
     }
 
     public List<ProposalResponse> listByProject(Long projectId) {
@@ -88,6 +105,10 @@ public class ProposalService {
 
         proposalRepository.save(proposal);
         projectRepository.save(project);
+
+        ProjectAcceptEvent event = new ProjectAcceptEvent(project.getId(), project.getClientId().getId());
+
+        outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_ACCEPTED_KEY, event);
     }
 
     @Transactional
@@ -101,6 +122,10 @@ public class ProposalService {
         }
         proposal.setStatus(ProposalStatus.REJECTED);
         proposalRepository.save(proposal);
+
+        ProjectRejectedEvent event = new ProjectRejectedEvent(project.getId(), project.getClientId().getId());
+
+        outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_REJECTED_KEY, event);
     }
 
     @Transactional
@@ -120,6 +145,10 @@ public class ProposalService {
         proposal.setStatus(ProposalStatus.IN_NEGOCIATION);
         projectRepository.save(project);
         proposalRepository.save(proposal);
+
+        ProjectNegotiateEvent event = new ProjectNegotiateEvent(project.getId(), proposal.getId());
+
+        outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROPOSAL_NEGOTIATED_KEY, event);
     }
 
     private Proposal findProposalAndValidateOwner(Long projectId, Long proposalId) {
