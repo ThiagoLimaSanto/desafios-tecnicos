@@ -157,6 +157,14 @@ class SecurityFlowTest {
     }
 
     @Test
+    void tokenWithoutSubjectReturns401() throws Exception {
+        String token = jwt.generateToken("", UserRole.CLIENT, "Test");
+        mvc.perform(get("/projects/get").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(projects);
+    }
+
+    @Test
     void tokenForRemovedUserReturns401() throws Exception {
         var token = bearer(client);
         when(users.findByEmail(client.getEmail())).thenReturn(Optional.empty());

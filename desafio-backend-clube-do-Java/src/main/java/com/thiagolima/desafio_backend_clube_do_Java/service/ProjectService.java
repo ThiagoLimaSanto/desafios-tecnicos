@@ -3,8 +3,12 @@ package com.thiagolima.desafio_backend_clube_do_Java.service;
 import java.util.List;
 import java.util.Objects;
 
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectFreelancerRequiredException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotCompletedException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotInProgressException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectOwnerRequiredException;
 import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +18,6 @@ import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProjectResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectCompletEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectFinishEvent;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
 import com.thiagolima.desafio_backend_clube_do_Java.repositories.ProjectRepository;
@@ -79,11 +82,11 @@ public class ProjectService {
                                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
                 if (project.getStatus() != ProjectStatus.IN_PROGRESS) {
-                        throw new ProjectNotFoundException("O projeto não está em andamento");
+                        throw new ProjectNotInProgressException("O projeto não está em andamento");
                 }
 
                 if (!Objects.equals(project.getFreelancerId().getId(), user.getId())) {
-                        throw new AccessDeniedException("Você não é o freelancer do projeto");
+                        throw new ProjectFreelancerRequiredException("Você não é o freelancer do projeto");
                 }
 
                 project.setStatus(ProjectStatus.COMPLETED);
@@ -102,17 +105,18 @@ public class ProjectService {
                                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
                 if (project.getStatus() != ProjectStatus.COMPLETED) {
-                        throw new ProjectNotFoundException("O projeto não está completo");
+                        throw new ProjectNotCompletedException("O projeto não está completo");
                 }
 
                 if (!Objects.equals(project.getClientId().getId(), user.getId())) {
-                        throw new AccessDeniedException("Você não é o cliente do projeto");
+                        throw new ProjectOwnerRequiredException("Você não é o cliente do projeto");
                 }
 
                 project.setStatus(ProjectStatus.FINISHED);
                 projectRepository.save(project);
 
-                ProjectFinishEvent event = new ProjectFinishEvent(project.getId(), project.getClientId().getId());
+                ProjectFinishEvent event = new ProjectFinishEvent(project.getId(), project.getClientId().getId(),
+                                project.getFreelancerId().getId());
 
                 outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_FINISHED_KEY,
                                 event);

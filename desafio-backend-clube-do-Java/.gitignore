@@ -18,6 +18,9 @@ target/
 *.iws
 *.iml
 *.ipr
+/db/outbox.sql
+/db/pending-notifications.sql
+/db
 
 ### NetBeans ###
 /nbproject/private/

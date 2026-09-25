@@ -1,20 +1,20 @@
 package com.thiagolima.desafio_backend_clube_do_Java.service;
 
-import java.util.Objects;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import com.thiagolima.desafio_backend_clube_do_Java.exception.AccountOwnerRequiredException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.UserExistException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.UserNotExistException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.UserRoleRequiredException;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.CreateUserRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.UpdateUserRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.LoginUserRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.user.UserResponse;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.UserExistException;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.UserNotExistException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
 import com.thiagolima.desafio_backend_clube_do_Java.repositories.UserRepository;
 
@@ -35,7 +35,10 @@ public class UserService {
             throw new UserExistException("Email já cadastrado");
         }
 
-        user.setRole(Objects.requireNonNull(request.role(), "Perfil é obrigatório"));
+        if (request.role() == null) {
+            throw new UserRoleRequiredException("Perfil é obrigatório");
+        }
+        user.setRole(request.role());
         user.setName(request.name());
         user.setDocument(request.document());
         user.setDocumentType(request.documentType());
@@ -78,7 +81,7 @@ public class UserService {
         if (authentication == null || !authentication.isAuthenticated()
                 || !(authentication.getPrincipal() instanceof User principal)
                 || id == null || !id.equals(principal.getId())) {
-            throw new AccessDeniedException("Você só pode alterar ou excluir sua própria conta");
+            throw new AccountOwnerRequiredException("Você só pode alterar ou excluir sua própria conta");
         }
     }
 }

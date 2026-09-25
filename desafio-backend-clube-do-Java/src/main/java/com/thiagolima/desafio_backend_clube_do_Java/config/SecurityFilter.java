@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.thiagolima.desafio_backend_clube_do_Java.exception.MissingTokenSubjectException;
 import com.thiagolima.desafio_backend_clube_do_Java.service.UserDetailsService;
 import com.thiagolima.desafio_backend_clube_do_Java.service.JwtService;
 
@@ -39,7 +40,7 @@ public class SecurityFilter extends OncePerRequestFilter {
             try {
                 String email = jwtService.getSubject(token);
                 if (email == null || email.isBlank()) {
-                    throw new IllegalArgumentException("Token sem identificação do usuário");
+                    throw new MissingTokenSubjectException("Token sem identificação do usuário");
                 }
                 var user = userDetailsService.loadUserByUsername(email);
                 new AccountStatusUserDetailsChecker().check(user);

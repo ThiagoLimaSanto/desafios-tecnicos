@@ -11,6 +11,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.EventPublishRejectedException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.UnroutableEventException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,8 +43,13 @@ public class OutboxPublisher {
             CorrelationData correlation = new CorrelationData();
             rabbitTemplate.send(event.getExchangeName(), event.getRoutingKey(), message, correlation);
             var confirm = correlation.getFuture().get(confirmTimeoutMs, TimeUnit.MILLISECONDS);
-            if (!confirm.ack() || correlation.getReturned() != null) {
-                throw new IllegalStateException("RabbitMQ did not confirm routing: " + confirm.reason());
+            if (correlation.getReturned() != null) {
+                throw new UnroutableEventException("RabbitMQ returned event " + event.getId()
+                        + ": " + correlation.getReturned().getReplyText());
+            }
+            if (!confirm.ack()) {
+                throw new EventPublishRejectedException("RabbitMQ rejected event " + event.getId()
+                        + ": " + confirm.reason());
             }
             event.published();
         } catch (Exception error) {

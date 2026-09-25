@@ -21,11 +21,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.server.ResponseStatusException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.*;
 
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProposalStatus;
@@ -97,7 +96,7 @@ class ProposalServiceTest {
         Project other = new Project();
         ReflectionTestUtils.setField(other, "id", 11L);
         proposal.setProject(other);
-        assertThrows(AccessDeniedException.class, () -> decide(accept));
+        assertThrows(ProposalProjectMismatchException.class, () -> decide(accept));
         verifyNoSaves();
     }
 
@@ -105,7 +104,7 @@ class ProposalServiceTest {
     @ValueSource(booleans = { true, false })
     void refusesAnotherClient(boolean accept) {
         project.setClientId(user(3000L));
-        assertThrows(AccessDeniedException.class, () -> decide(accept));
+        assertThrows(ProjectOwnerRequiredException.class, () -> decide(accept));
         verifyNoSaves();
     }
 
@@ -114,8 +113,7 @@ class ProposalServiceTest {
     void refusesAlreadyDecidedProposals(boolean accept) {
         for (ProposalStatus status : List.of(ProposalStatus.ACCEPTED, ProposalStatus.REJECTED)) {
             proposal.setStatus(status);
-            ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> decide(accept));
-            assertEquals(409, error.getStatusCode().value());
+            assertThrows(ProposalDecisionNotAllowedException.class, () -> decide(accept));
         }
         verifyNoSaves();
     }
@@ -124,7 +122,7 @@ class ProposalServiceTest {
     @ValueSource(booleans = { true, false })
     void refusesClosedProject(boolean accept) {
         project.setStatus(ProjectStatus.IN_PROGRESS);
-        assertThrows(ResponseStatusException.class, () -> decide(accept));
+        assertThrows(ProposalDecisionNotAllowedException.class, () -> decide(accept));
         verifyNoSaves();
     }
 
@@ -201,12 +199,12 @@ class ProposalServiceTest {
         second.setProject(project);
         when(proposals.findById(21L)).thenReturn(Optional.of(second));
         clearInvocations(projects, proposals);
-        assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.accept(10L, 21L)).getStatusCode().value());
-        assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.reject(10L, 21L)).getStatusCode().value());
-        assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.negotiate(10L, 21L)).getStatusCode().value());
+        assertThrows(ProposalDecisionNotAllowedException.class,
+                () -> service.accept(10L, 21L));
+        assertThrows(ProposalDecisionNotAllowedException.class,
+                () -> service.reject(10L, 21L));
+        assertThrows(ProposalNegotiationNotAllowedException.class,
+                () -> service.negotiate(10L, 21L));
         assertEquals(ProposalStatus.PENDING, second.getStatus());
         assertEquals(ProposalStatus.IN_NEGOCIATION, proposal.getStatus());
         verifyNoSaves();
@@ -216,8 +214,8 @@ class ProposalServiceTest {
     @EnumSource(value = ProjectStatus.class, names = "OPEN", mode = EnumSource.Mode.EXCLUDE)
     void negotiationRequiresOpenProject(ProjectStatus status) {
         project.setStatus(status);
-        assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.negotiate(10L, 20L)).getStatusCode().value());
+        assertThrows(ProposalNegotiationNotAllowedException.class,
+                () -> service.negotiate(10L, 20L));
         assertEquals(status, project.getStatus());
         verifyNoSaves();
     }
@@ -226,15 +224,15 @@ class ProposalServiceTest {
     @EnumSource(value = ProposalStatus.class, names = "PENDING", mode = EnumSource.Mode.EXCLUDE)
     void negotiationRequiresPendingProposal(ProposalStatus status) {
         proposal.setStatus(status);
-        assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.negotiate(10L, 20L)).getStatusCode().value());
+        assertThrows(ProposalNegotiationNotAllowedException.class,
+                () -> service.negotiate(10L, 20L));
         verifyNoSaves();
     }
 
     @Test
     void negotiationRequiresOwner() {
         project.setClientId(user(3000L));
-        assertThrows(AccessDeniedException.class, () -> service.negotiate(10L, 20L));
+        assertThrows(ProjectOwnerRequiredException.class, () -> service.negotiate(10L, 20L));
         verifyNoSaves();
     }
 
@@ -243,7 +241,7 @@ class ProposalServiceTest {
         Project other = new Project();
         ReflectionTestUtils.setField(other, "id", 11L);
         proposal.setProject(other);
-        assertThrows(AccessDeniedException.class, () -> service.negotiate(10L, 20L));
+        assertThrows(ProposalProjectMismatchException.class, () -> service.negotiate(10L, 20L));
         verifyNoSaves();
     }
 

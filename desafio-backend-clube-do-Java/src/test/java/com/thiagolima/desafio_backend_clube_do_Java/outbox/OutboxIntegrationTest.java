@@ -188,7 +188,7 @@ class OutboxIntegrationTest {
                 eq(RabbitMQConfig.PROJECT_ACCEPTED_KEY), message.capture(), any(CorrelationData.class));
         assertEquals(event.getId().toString(), message.getValue().getMessageProperties().getMessageId());
         assertEquals(MessageDeliveryMode.PERSISTENT, message.getValue().getMessageProperties().getDeliveryMode());
-        assertEquals(new ProjectAcceptEvent(10L, 20L), converter.fromMessage(message.getValue()));
+        assertEquals(new ProjectAcceptEvent(10L, 20L, 30L), converter.fromMessage(message.getValue()));
         assertFalse(publisher.publishNext());
     }
 
@@ -198,6 +198,7 @@ class OutboxIntegrationTest {
         acknowledge(false);
         publisher.publishNext();
         assertPendingRetry();
+        assertTrue(events.findAll().getFirst().getLastError().contains("EventPublishRejectedException"));
     }
 
     @Test
@@ -212,6 +213,7 @@ class OutboxIntegrationTest {
         }).when(rabbit).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
         publisher.publishNext();
         assertPendingRetry();
+        assertTrue(events.findAll().getFirst().getLastError().contains("UnroutableEventException"));
     }
 
     @Test
@@ -255,7 +257,7 @@ class OutboxIntegrationTest {
 
     private void enqueue() {
         outbox.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_ACCEPTED_KEY,
-                new ProjectAcceptEvent(10L, 20L));
+                new ProjectAcceptEvent(10L, 20L, 30L));
     }
 
     private void persistEvent() {

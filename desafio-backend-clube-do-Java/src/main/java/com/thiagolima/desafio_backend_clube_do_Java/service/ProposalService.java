@@ -3,12 +3,18 @@ package com.thiagolima.desafio_backend_clube_do_Java.service;
 import java.util.List;
 import java.util.Objects;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
+import com.thiagolima.desafio_backend_clube_do_Java.exception.FreelancerRoleRequiredException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectExistFreelancerException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotOpenException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectOwnerRequiredException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProposalDecisionNotAllowedException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProposalNegotiationNotAllowedException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProposalNotFoundException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProposalProjectMismatchException;
 import com.thiagolima.desafio_backend_clube_do_Java.config.RabbitMQConfig;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProposalRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProposalResponse;
@@ -19,8 +25,6 @@ import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectAcceptEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectNegotiateEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectRejectedEvent;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProposalEvent;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectExistFreelancerException;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Proposal;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
@@ -44,7 +48,7 @@ public class ProposalService {
         User freelancer = GetUserAuthentication.getUserAuthenticated();
 
         if (freelancer.getRole() != UserRole.FREELANCER) {
-            throw new AccessDeniedException(
+            throw new FreelancerRoleRequiredException(
                     "Somente freelancers podem enviar propostas");
         }
 
@@ -52,7 +56,7 @@ public class ProposalService {
                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
         if (project.getStatus() != ProjectStatus.OPEN) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new ProjectNotOpenException(
                     "O projeto não está aberto para propostas");
         }
 
@@ -76,7 +80,7 @@ public class ProposalService {
                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
         if (!Objects.equals(client.getId(), project.getClientId().getId())) {
-            throw new AccessDeniedException(
+            throw new ProjectOwnerRequiredException(
                     "Somente o cliente do projeto pode visualizar suas propostas");
         }
 
@@ -106,7 +110,8 @@ public class ProposalService {
         proposalRepository.save(proposal);
         projectRepository.save(project);
 
-        ProjectAcceptEvent event = new ProjectAcceptEvent(project.getId(), project.getClientId().getId());
+        ProjectAcceptEvent event = new ProjectAcceptEvent(project.getId(), project.getClientId().getId(),
+                proposal.getFreelancer().getId());
 
         outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_ACCEPTED_KEY, event);
     }
@@ -123,7 +128,8 @@ public class ProposalService {
         proposal.setStatus(ProposalStatus.REJECTED);
         proposalRepository.save(proposal);
 
-        ProjectRejectedEvent event = new ProjectRejectedEvent(project.getId(), project.getClientId().getId());
+        ProjectRejectedEvent event = new ProjectRejectedEvent(project.getId(), project.getClientId().getId(),
+                proposal.getFreelancer().getId());
 
         outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_REJECTED_KEY, event);
     }
@@ -133,7 +139,7 @@ public class ProposalService {
         Proposal proposal = findProposalAndValidateOwner(projectId, proposalId);
         Project project = proposal.getProject();
         if (project.getStatus() != ProjectStatus.OPEN || proposal.getStatus() != ProposalStatus.PENDING) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new ProposalNegotiationNotAllowedException(
                     "A negociação exige um projeto aberto e uma proposta pendente");
         }
         if (project.getFreelancerId() != null) {
@@ -146,7 +152,8 @@ public class ProposalService {
         projectRepository.save(project);
         proposalRepository.save(proposal);
 
-        ProjectNegotiateEvent event = new ProjectNegotiateEvent(project.getId(), proposal.getId());
+        ProjectNegotiateEvent event = new ProjectNegotiateEvent(project.getId(), proposal.getId(),
+                proposal.getFreelancer().getId());
 
         outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROPOSAL_NEGOTIATED_KEY, event);
     }
@@ -157,16 +164,15 @@ public class ProposalService {
                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
 
         if (!Objects.equals(client.getId(), project.getClientId().getId())) {
-            throw new AccessDeniedException(
+            throw new ProjectOwnerRequiredException(
                     "Somente o cliente do projeto pode decidir sobre suas propostas");
         }
 
         Proposal proposal = proposalRepository.findById(proposalId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Proposta não encontrada"));
+                .orElseThrow(() -> new ProposalNotFoundException("Proposta não encontrada"));
 
         if (!Objects.equals(proposal.getProject().getId(), projectId)) {
-            throw new AccessDeniedException("A proposta não pertence ao projeto informado");
+            throw new ProposalProjectMismatchException("A proposta não pertence ao projeto informado");
         }
 
         return proposal;
@@ -180,7 +186,7 @@ public class ProposalService {
                 && proposal.getStatus() == ProposalStatus.IN_NEGOCIATION;
 
         if (!pendingInOpenProject && !negotiating) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
+            throw new ProposalDecisionNotAllowedException(
                     "O estado do projeto ou da proposta não permite essa decisão");
         }
     }

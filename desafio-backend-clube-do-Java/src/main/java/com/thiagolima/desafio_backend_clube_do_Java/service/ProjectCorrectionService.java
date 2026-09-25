@@ -3,19 +3,19 @@ package com.thiagolima.desafio_backend_clube_do_Java.service;
 import java.util.List;
 import java.util.Objects;
 
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotCompletedException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectOwnerRequiredException;
+import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectParticipantRequiredException;
 import com.thiagolima.desafio_backend_clube_do_Java.outbox.OutboxService;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.thiagolima.desafio_backend_clube_do_Java.config.RabbitMQConfig;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.CorrectionsRequest;
 import com.thiagolima.desafio_backend_clube_do_Java.dto.project.ProjectCorrectionResponse;
 import com.thiagolima.desafio_backend_clube_do_Java.enums.ProjectStatus;
 import com.thiagolima.desafio_backend_clube_do_Java.event.ProjectCorrectionsEvent;
-import com.thiagolima.desafio_backend_clube_do_Java.exception.ProjectNotFoundException;
 import com.thiagolima.desafio_backend_clube_do_Java.model.Project;
 import com.thiagolima.desafio_backend_clube_do_Java.model.ProjectCorrection;
 import com.thiagolima.desafio_backend_clube_do_Java.model.User;
@@ -40,11 +40,11 @@ public class ProjectCorrectionService {
         Project project = projectRepository.findById(id)
                 .orElseThrow(() -> new ProjectNotFoundException("Projeto não encontrado"));
         if (!Objects.equals(project.getClientId().getId(), user.getId())) {
-            throw new AccessDeniedException("Você não é o dono do projeto");
+            throw new ProjectOwnerRequiredException("Você não é o dono do projeto");
         }
 
         if (project.getStatus() != ProjectStatus.COMPLETED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "O projeto não está concluído");
+            throw new ProjectNotCompletedException("O projeto não está concluído");
         }
 
         projectCorrection.setProject(project);
@@ -53,7 +53,7 @@ public class ProjectCorrectionService {
         projectRepository.save(project);
         projectCorrectionRepository.save(projectCorrection);
 
-        ProjectCorrectionsEvent event = new ProjectCorrectionsEvent(project.getId());
+        ProjectCorrectionsEvent event = new ProjectCorrectionsEvent(project.getId(), project.getFreelancerId().getId());
 
         outboxService.enqueue(RabbitMQConfig.PROJECT_EXCHANGE, RabbitMQConfig.PROJECT_CORRECTIONS_KEY, event);
     }
@@ -69,7 +69,7 @@ public class ProjectCorrectionService {
                 && Objects.equals(user.getId(), project.getFreelancerId().getId());
 
         if (!isClient && !isFreelancer) {
-            throw new AccessDeniedException(
+            throw new ProjectParticipantRequiredException(
                     "Somente o cliente ou o freelancer do projeto pode visualizar as correções");
         }
 

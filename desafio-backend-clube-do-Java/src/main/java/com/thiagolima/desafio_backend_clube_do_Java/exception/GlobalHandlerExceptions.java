@@ -24,17 +24,6 @@ public class GlobalHandlerExceptions {
                                 .body(new ErrorResponse(403, error.getMessage()));
         }
 
-        @ExceptionHandler(UserExistException.class)
-        public ResponseEntity<ErrorResponse> handleUserExistException(UserExistException e) {
-                ErrorResponse error = new ErrorResponse(
-                                HttpStatus.NOT_FOUND.value(),
-                                e.getMessage());
-
-                return ResponseEntity
-                                .status(HttpStatus.NOT_FOUND)
-                                .body(error);
-        }
-
         @ExceptionHandler(UserNotExistException.class)
         public ResponseEntity<ErrorResponse> handleUserNotExistException(UserNotExistException e) {
                 ErrorResponse error = new ErrorResponse(
@@ -57,14 +46,29 @@ public class GlobalHandlerExceptions {
                                 .body(error);
         }
 
-        @ExceptionHandler(ProjectExistFreelancerException.class)
-        public ResponseEntity<ErrorResponse> handleProjectExistFreelancerException(ProjectExistFreelancerException e) {
-                ErrorResponse error = new ErrorResponse(
-                                HttpStatus.CONFLICT.value(),
-                                e.getMessage());
+        @ExceptionHandler({ ProjectExistFreelancerException.class, UserExistException.class,
+                        ProjectNotOpenException.class, ProjectNotInProgressException.class,
+                        ProjectNotCompletedException.class, ProposalNegotiationNotAllowedException.class,
+                        ProposalDecisionNotAllowedException.class, DuplicateNotificationException.class })
+        public ResponseEntity<ErrorResponse> handleConflict(RuntimeException error) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(new ErrorResponse(409, error.getMessage()));
+        }
 
-                return ResponseEntity
-                                .status(HttpStatus.CONFLICT)
-                                .body(error);
+        @ExceptionHandler(ProposalNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleProposalNotFound(ProposalNotFoundException error) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                .body(new ErrorResponse(404, error.getMessage()));
+        }
+
+        @ExceptionHandler(UserRoleRequiredException.class)
+        public ResponseEntity<ErrorResponse> handleUserRoleRequired(UserRoleRequiredException error) {
+                return ResponseEntity.badRequest().body(new ErrorResponse(400, error.getMessage()));
+        }
+
+        @ExceptionHandler(NotificationNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleNotificationNotFound(NotificationNotFoundException error) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                .body(new ErrorResponse(404, error.getMessage()));
         }
 }
